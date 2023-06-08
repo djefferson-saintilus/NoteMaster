@@ -1,342 +1,389 @@
 import sys
-from PyQt5.QtWidgets import (
-    QApplication, QMainWindow, QTextEdit, QAction, QFileDialog, QMessageBox,
-    QInputDialog, QLabel, QVBoxLayout, QWidget, QShortcut, QFontDialog, QColorDialog
-)
-from PyQt5.QtGui import QKeySequence
-from PyQt5.QtCore import Qt, QSettings
-from PyQt5.QtCore import QSize, QPoint
-from PyQt5.QtGui import QTextListFormat
-from PyQt5.QtGui import QTextDocumentWriter
-from PyQt5.QtGui import QTextDocument
+from PyQt5.QtWidgets import *
+from PyQt5.QtGui import *
+from PyQt5.QtCore import *
 
 class NoteTakingApp(QMainWindow):
     def __init__(self):
         super().__init__()
+
         self.initUI()
-        self.settings = QSettings('NoteTakingApp', 'Settings')
-        self.loadSettings()
-        
+        self.noteChanged = False
+
     def initUI(self):
-        self.setWindowTitle("NoteMaster")
-        self.setGeometry(100, 100, 500, 500)
-        
         self.textEdit = QTextEdit(self)
         self.setCentralWidget(self.textEdit)
-        
+        self.textEdit.setStyleSheet("QTextEdit { margin: 20px; padding: 20px; }")
+        self.textEdit.textChanged.connect(self.onTextChanged)
+
         self.createActions()
         self.createMenus()
         self.createToolbars()
         self.createShortcuts()
-        
-        self.noteChanged = False
-        
+
+        self.setGeometry(100, 100, 800, 600)
+        self.setWindowTitle("Note Taking App")
+
+        self.show()
+
+    def onTextChanged(self):
+        self.noteChanged = True
+
+    def mergeFormatOnWordOrSelection(self, format):
+        cursor = self.textEdit.textCursor()
+        if not cursor.hasSelection():
+            cursor.select(QTextCursor.WordUnderCursor)
+        cursor.mergeCharFormat(format)
+        self.textEdit.mergeCurrentCharFormat(format)
+
+    def insertTimestamp(self):
+        cursor = self.textEdit.textCursor()
+        cursor.insertText(QDateTime.currentDateTime().toString())
+
+    def countWords(self):
+        text = self.textEdit.toPlainText()
+        wordCount = len(text.split())
+        QMessageBox.information(self, "Word Count", f"Number of words: {wordCount}")
+
+    def highlightSelection(self):
+        cursor = self.textEdit.textCursor()
+        selectedText = cursor.selectedText()
+        if selectedText:
+            fmt = QTextCharFormat()
+            color = QColorDialog.getColor(self.textEdit.textBackgroundColor(), self)
+            if color.isValid():
+                fmt.setBackground(color)
+                cursor.mergeCharFormat(fmt)
+                self.textEdit.mergeCurrentCharFormat(fmt)
+
+    def removeHighlight(self):
+        cursor = self.textEdit.textCursor()
+        selectedText = cursor.selectedText()
+        if selectedText:
+            fmt = QTextCharFormat()
+            fmt.setBackground(Qt.NoBrush)
+            cursor.mergeCharFormat(fmt)
+            self.textEdit.mergeCurrentCharFormat(fmt)
+    def formatBold(self):
+        fmt = QTextCharFormat()
+        fmt.setFontWeight(QFont.Bold if self.formatBoldAction.isChecked() else QFont.Normal)
+        self.mergeFormatOnWordOrSelection(fmt)
+
+    def formatItalic(self):
+        fmt = QTextCharFormat()
+        fmt.setFontItalic(self.formatItalicAction.isChecked())
+        self.mergeFormatOnWordOrSelection(fmt)
+
+    def formatUnderline(self):
+        fmt = QTextCharFormat()
+        fmt.setFontUnderline(self.formatUnderlineAction.isChecked())
+        self.mergeFormatOnWordOrSelection(fmt)
+
+    def formatBullet(self):
+        cursor = self.textEdit.textCursor()
+        if self.formatBulletAction.isChecked():
+            cursor.insertList(QTextListFormat.ListDisc)
+        else:
+            cursor.insertList(QTextListFormat.ListDisc)
+        self.textEdit.setFocus()
+
+    def formatNumbered(self):
+        cursor = self.textEdit.textCursor()
+        if self.formatNumberedAction.isChecked():
+            cursor.insertList(QTextListFormat.ListDecimal)
+        else:
+            cursor.insertList(QTextListFormat.ListDisc)
+        self.textEdit.setFocus()
+
+    def formatSize(self):
+        font, ok = QFontDialog.getFont(self.textEdit.font(), self)
+        if ok and font.pointSizeF() > 0:
+            self.textEdit.setFont(font)
+        elif not ok:
+            # Show an error message if the user cancels the font dialog
+            QMessageBox.warning(self, "Error", "Font selection canceled.")
+
+    def formatFont(self):
+        font, ok = QFontDialog.getFont(self.textEdit.font(), self)
+        if ok:
+            self.textEdit.setFont(font)
+        elif not ok:
+            # Show an error message if the user cancels the font dialog
+            QMessageBox.warning(self, "Error", "Font selection canceled.")
+
+    def formatColor(self):
+        color = QColorDialog.getColor(self.textEdit.textColor(), self)
+        if color.isValid():
+            self.textEdit.setTextColor(color)
+        elif not color.isValid():
+            # Show an error message if the user cancels the color dialog
+            QMessageBox.warning(self, "Error", "Color selection canceled.")
+
+    # ... (remaining functions)
+
+    def insertImage(self):
+        options = QFileDialog.Options()
+        options |= QFileDialog.ReadOnly
+        file, _ = QFileDialog.getOpenFileName(self, "Insert Image", "", "Images (*.png *.xpm *.jpg *.bmp);;All Files (*)", options=options)
+        if file:
+            imageFormat = QImage(file).format()
+            if imageFormat != QImage.Format_Invalid:
+                self.textEdit.document().addResource(QTextDocument.ImageResource, QUrl(file), QVariant(QImage(file)))
+
+                # Prompt the user for the desired width and height in percentage
+                width, ok1 = QInputDialog.getInt(self, "Image Size", "Enter width (in percentage):", 50, 1, 100)
+                height, ok2 = QInputDialog.getInt(self, "Image Size", "Enter height (in percentage):", 50, 1, 100)
+
+                if ok1 and ok2:
+                    # Generate the img tag with inline styling
+                    img_tag = f'<img src="{file}" style="width: {width}%; height: {height}%;">'
+                    cursor = self.textEdit.textCursor()
+                    cursor.insertHtml(img_tag)
+        elif not file:
+            # Show an error message if the user cancels the file dialog
+            QMessageBox.warning(self, "Error", "Image insertion canceled.")
+
+
+
+    def insertHyperlink(self):
+        link, ok = QInputDialog.getText(self, "Insert Hyperlink", "Enter URL:")
+        if ok and link:
+            cursor = self.textEdit.textCursor()
+            cursor.insertHtml(f'<a href="{link}">{link}</a>')
+        elif not ok:
+            # Show an error message if the user cancels the input dialog
+            QMessageBox.warning(self, "Error", "Hyperlink insertion canceled.")
+
+
     def createActions(self):
-        self.newAction = QAction("New", self)
-        self.newAction.setShortcut(QKeySequence.New)
+        self.newAction = QAction(QIcon("icons/new.png"), "New", self)
+        self.newAction.setShortcut("Ctrl+N")
         self.newAction.triggered.connect(self.newNote)
-        
-        self.openAction = QAction("Open", self)
-        self.openAction.setShortcut(QKeySequence.Open)
+
+        self.openAction = QAction(QIcon("icons/open.png"), "Open", self)
+        self.openAction.setShortcut("Ctrl+O")
         self.openAction.triggered.connect(self.openNote)
-        
-        self.saveAction = QAction("Save", self)
-        self.saveAction.setShortcut(QKeySequence.Save)
+
+        self.saveAction = QAction(QIcon("icons/save.png"), "Save", self)
+        self.saveAction.setShortcut("Ctrl+S")
         self.saveAction.triggered.connect(self.saveNote)
-        
-        self.saveAsAction = QAction("Save As...", self)
-        self.saveAsAction.setShortcut(QKeySequence.SaveAs)
-        self.saveAsAction.triggered.connect(self.saveNoteAs)
-        
-        self.undoAction = QAction("Undo", self)
-        self.undoAction.setShortcut(QKeySequence.Undo)
+
+        self.exitAction = QAction(QIcon("icons/exit.png"), "Exit", self)
+        self.exitAction.setShortcut("Ctrl+Q")
+        self.exitAction.triggered.connect(self.close)
+
+        self.undoAction = QAction(QIcon("icons/undo.png"), "Undo", self)
+        self.undoAction.setShortcut("Ctrl+Z")
         self.undoAction.triggered.connect(self.textEdit.undo)
-        
-        self.redoAction = QAction("Redo", self)
-        self.redoAction.setShortcut(QKeySequence.Redo)
+
+        self.redoAction = QAction(QIcon("icons/redo.png"), "Redo", self)
+        self.redoAction.setShortcut("Ctrl+Y")
         self.redoAction.triggered.connect(self.textEdit.redo)
-        
-        self.cutAction = QAction("Cut", self)
-        self.cutAction.setShortcut(QKeySequence.Cut)
+
+        self.cutAction = QAction(QIcon("icons/cut.png"), "Cut", self)
+        self.cutAction.setShortcut("Ctrl+X")
         self.cutAction.triggered.connect(self.textEdit.cut)
-        
-        self.copyAction = QAction("Copy", self)
-        self.copyAction.setShortcut(QKeySequence.Copy)
+
+        self.copyAction = QAction(QIcon("icons/copy.png"), "Copy", self)
+        self.copyAction.setShortcut("Ctrl+C")
         self.copyAction.triggered.connect(self.textEdit.copy)
-        
-        self.pasteAction = QAction("Paste", self)
-        self.pasteAction.setShortcut(QKeySequence.Paste)
+
+        self.pasteAction = QAction(QIcon("icons/paste.png"), "Paste", self)
+        self.pasteAction.setShortcut("Ctrl+V")
         self.pasteAction.triggered.connect(self.textEdit.paste)
-        
-        self.selectAllAction = QAction("Select All", self)
-        self.selectAllAction.setShortcut(QKeySequence.SelectAll)
-        self.selectAllAction.triggered.connect(self.textEdit.selectAll)
-        
-        self.searchAction = QAction("Search", self)
-        self.searchAction.setShortcut(QKeySequence.Find)
-        self.searchAction.triggered.connect(self.searchNote)
-        
-        self.formatBoldAction = QAction("Bold", self)
-        self.formatBoldAction.setShortcut(QKeySequence.Bold)
+
+        self.formatBoldAction = QAction(QIcon("icons/bold.png"), "Bold", self)
+        self.formatBoldAction.setShortcut("Ctrl+B")
         self.formatBoldAction.setCheckable(True)
-        self.formatBoldAction.triggered.connect(self.toggleBold)
-        
-        self.formatItalicAction = QAction("Italic", self)
-        self.formatItalicAction.setShortcut(QKeySequence.Italic)
+        self.formatBoldAction.triggered.connect(self.formatBold)
+
+        self.formatItalicAction = QAction(QIcon("icons/italic.png"), "Italic", self)
+        self.formatItalicAction.setShortcut("Ctrl+I")
         self.formatItalicAction.setCheckable(True)
-        self.formatItalicAction.triggered.connect(self.toggleItalic)
-        
-        self.formatUnderlineAction = QAction("Underline", self)
-        self.formatUnderlineAction.setShortcut(QKeySequence.Underline)
+        self.formatItalicAction.triggered.connect(self.formatItalic)
+
+        self.formatUnderlineAction = QAction(QIcon("icons/underline.png"), "Underline", self)
+        self.formatUnderlineAction.setShortcut("Ctrl+U")
         self.formatUnderlineAction.setCheckable(True)
-        self.formatUnderlineAction.triggered.connect(self.toggleUnderline)
-        
-        self.formatBulletAction = QAction("Bullet List", self)
-        self.formatBulletAction.triggered.connect(self.toggleBulletList)
-        
-        self.formatNumberedAction = QAction("Numbered List", self)
-        self.formatNumberedAction.triggered.connect(self.toggleNumberedList)
+        self.formatUnderlineAction.triggered.connect(self.formatUnderline)
 
-        ###
-        self.formatSizeAction = QAction("Font Size", self)
-        self.formatSizeAction.triggered.connect(self.setFontSize)
+        self.formatBulletAction = QAction(QIcon("icons/bullet.png"), "Bullet List", self)
+        self.formatBulletAction.setShortcut("Ctrl+Shift+B")
+        self.formatBulletAction.setCheckable(True)
+        self.formatBulletAction.triggered.connect(self.formatBullet)
 
-        self.formatFontAction = QAction("Font", self)
-        self.formatFontAction.triggered.connect(self.setFont)
+        self.formatNumberedAction = QAction(QIcon("icons/numbered.png"), "Numbered List", self)
+        self.formatNumberedAction.setShortcut("Ctrl+Shift+N")
+        self.formatNumberedAction.setCheckable(True)
+        self.formatNumberedAction.triggered.connect(self.formatNumbered)
 
-        self.formatColorAction = QAction("Text Color", self)
-        self.formatColorAction.triggered.connect(self.setTextColor)
+        self.formatSizeAction = QAction(QIcon("icons/size.png"), "Font Size", self)
+        self.formatSizeAction.triggered.connect(self.formatSize)
 
-        
+        self.formatFontAction = QAction(QIcon("icons/font.png"), "Font Family", self)
+        self.formatFontAction.triggered.connect(self.formatFont)
+
+        self.formatColorAction = QAction(QIcon("icons/color.png"), "Font Color", self)
+        self.formatColorAction.triggered.connect(self.formatColor)
+
+        self.insertTimestampAction = QAction(QIcon("icons/timestamp.png"), "Insert Timestamp", self)
+        self.insertTimestampAction.triggered.connect(self.insertTimestamp)
+
+        self.countWordsAction = QAction("Count Words", self)
+        self.countWordsAction.triggered.connect(self.countWords)
+
+        self.highlightSelectionAction = QAction("Highlight Selection", self)
+        self.highlightSelectionAction.triggered.connect(self.highlightSelection)
+
+        self.removeHighlightAction = QAction("Remove Highlight", self)
+        self.removeHighlightAction.triggered.connect(self.removeHighlight)
+
+        self.insertImageAction = QAction(QIcon("icons/image.png"), "Insert Image", self)
+        self.insertImageAction.triggered.connect(self.insertImage)
+
+        self.insertHyperlinkAction = QAction(QIcon("icons/hyperlink.png"), "Insert Hyperlink", self)
+        self.insertHyperlinkAction.triggered.connect(self.insertHyperlink)
+
     def createMenus(self):
         menubar = self.menuBar()
-        
-        fileMenu = menubar.addMenu("File")
+
+        fileMenu = menubar.addMenu("&File")
         fileMenu.addAction(self.newAction)
         fileMenu.addAction(self.openAction)
         fileMenu.addAction(self.saveAction)
-        fileMenu.addAction(self.saveAsAction)
-        
-        editMenu = menubar.addMenu("Edit")
+        fileMenu.addSeparator()
+        fileMenu.addAction(self.exitAction)
+
+        editMenu = menubar.addMenu("&Edit")
         editMenu.addAction(self.undoAction)
         editMenu.addAction(self.redoAction)
+        editMenu.addSeparator()
         editMenu.addAction(self.cutAction)
         editMenu.addAction(self.copyAction)
         editMenu.addAction(self.pasteAction)
-        editMenu.addAction(self.selectAllAction)
-        editMenu.addAction(self.searchAction)
-        
-        formatMenu = menubar.addMenu("Format")
+
+        formatMenu = menubar.addMenu("&Format")
         formatMenu.addAction(self.formatBoldAction)
         formatMenu.addAction(self.formatItalicAction)
         formatMenu.addAction(self.formatUnderlineAction)
+        formatMenu.addSeparator()
         formatMenu.addAction(self.formatBulletAction)
         formatMenu.addAction(self.formatNumberedAction)
-        
+        formatMenu.addSeparator()
+        formatMenu.addAction(self.formatSizeAction)
+        formatMenu.addAction(self.formatFontAction)
+        formatMenu.addAction(self.formatColorAction)
+
+        insertMenu = menubar.addMenu("&Insert")
+        insertMenu.addAction(self.insertTimestampAction)
+        insertMenu.addSeparator()
+        insertMenu.addAction(self.insertImageAction)
+        insertMenu.addAction(self.insertHyperlinkAction)
+
+        toolsMenu = menubar.addMenu("&Tools")
+        toolsMenu.addAction(self.countWordsAction)
+        toolsMenu.addAction(self.highlightSelectionAction)
+        toolsMenu.addAction(self.removeHighlightAction)
+
     def createToolbars(self):
         toolbar = self.addToolBar("Toolbar")
+
         toolbar.addAction(self.newAction)
         toolbar.addAction(self.openAction)
         toolbar.addAction(self.saveAction)
         toolbar.addSeparator()
-        toolbar.addAction(self.undoAction)
-        toolbar.addAction(self.redoAction)
-        toolbar.addSeparator()
+
         toolbar.addAction(self.cutAction)
         toolbar.addAction(self.copyAction)
         toolbar.addAction(self.pasteAction)
         toolbar.addSeparator()
+
+        toolbar.addAction(self.undoAction)
+        toolbar.addAction(self.redoAction)
+        toolbar.addSeparator()
+
         toolbar.addAction(self.formatBoldAction)
         toolbar.addAction(self.formatItalicAction)
         toolbar.addAction(self.formatUnderlineAction)
+        toolbar.addSeparator()
+
         toolbar.addAction(self.formatBulletAction)
         toolbar.addAction(self.formatNumberedAction)
         toolbar.addSeparator()
+
         toolbar.addAction(self.formatSizeAction)
         toolbar.addAction(self.formatFontAction)
         toolbar.addAction(self.formatColorAction)
+        toolbar.addSeparator()
 
-        
+        toolbar.addAction(self.insertTimestampAction)
+        toolbar.addSeparator()
+
+        toolbar.addAction(self.insertImageAction)
+        toolbar.addAction(self.insertHyperlinkAction)
+
     def createShortcuts(self):
-        newShortcut = QShortcut(QKeySequence.New, self)
-        newShortcut.activated.connect(self.newNote)
-        
-        openShortcut = QShortcut(QKeySequence.Open, self)
-        openShortcut.activated.connect(self.openNote)
-        
-        saveShortcut = QShortcut(QKeySequence.Save, self)
-        saveShortcut.activated.connect(self.saveNote)
-        
-        saveAsShortcut = QShortcut(QKeySequence.SaveAs, self)
-        saveAsShortcut.activated.connect(self.saveNoteAs)
-        
-        undoShortcut = QShortcut(QKeySequence.Undo, self)
-        undoShortcut.activated.connect(self.textEdit.undo)
-        
-        redoShortcut = QShortcut(QKeySequence.Redo, self)
-        redoShortcut.activated.connect(self.textEdit.redo)
-        
-        cutShortcut = QShortcut(QKeySequence.Cut, self)
-        cutShortcut.activated.connect(self.textEdit.cut)
-        
-        copyShortcut = QShortcut(QKeySequence.Copy, self)
-        copyShortcut.activated.connect(self.textEdit.copy)
-        
-        pasteShortcut = QShortcut(QKeySequence.Paste, self)
-        pasteShortcut.activated.connect(self.textEdit.paste)
-        
-        selectAllShortcut = QShortcut(QKeySequence.SelectAll, self)
-        selectAllShortcut.activated.connect(self.textEdit.selectAll)
-        
-        searchShortcut = QShortcut(QKeySequence.Find, self)
-        searchShortcut.activated.connect(self.searchNote)
-        
+        QShortcut("Ctrl+Z", self, self.textEdit.undo)
+        QShortcut("Ctrl+Y", self, self.textEdit.redo)
+        QShortcut("Ctrl+X", self, self.textEdit.cut)
+        QShortcut("Ctrl+C", self, self.textEdit.copy)
+        QShortcut("Ctrl+V", self, self.textEdit.paste)
+        QShortcut("Ctrl+B", self, self.formatBold)
+        QShortcut("Ctrl+I", self, self.formatItalic)
+        QShortcut("Ctrl+U", self, self.formatUnderline)
+        QShortcut("Ctrl+Shift+B", self, self.formatBullet)
+        QShortcut("Ctrl+Shift+N", self, self.formatNumbered)
+        QShortcut("Ctrl+S", self, self.saveNote)
+        QShortcut("Ctrl+O", self, self.openNote)
+        QShortcut("Ctrl+N", self, self.newNote)
+
     def newNote(self):
         if self.noteChanged:
-            response = self.promptSaveChanges()
-            if response == QMessageBox.Save:
-                self.saveNote()
-            elif response == QMessageBox.Cancel:
-                return
+            self.savePrompt()
         self.textEdit.clear()
-        self.setWindowTitle("Note Taking App")
         self.noteChanged = False
-        
+
     def openNote(self):
         if self.noteChanged:
-            response = self.promptSaveChanges()
-            if response == QMessageBox.Save:
-                self.saveNote()
-            elif response == QMessageBox.Cancel:
-                return
-        filename, _ = QFileDialog.getOpenFileName(self, "Open Note", "", "HTML Files (*.html *.htm)")
-        if filename:
-            with open(filename, 'r') as file:
-                html_content = file.read()
-                text_document = QTextDocument()
-                text_document.setHtml(html_content)
-                self.textEdit.setDocument(text_document)
-                self.setWindowTitle(f"Note Taking App - {filename}")
-                self.noteChanged = False
-
-    def saveNoteAs(self):
-        filename, _ = QFileDialog.getSaveFileName(self, "Save Note", "", "HTML Files (*.html *.htm)")
-        if filename:
-            with open(filename, 'w') as file:
-                html_content = self.textEdit.document().toHtml()
-                file.write(html_content)
-            self.setWindowTitle(f"Note Taking App - {filename}")
-            self.noteChanged = False
-            QMessageBox.information(self, "Note Saved", "Note saved successfully.")
+            self.savePrompt()
+        options = QFileDialog.Options()
+        options |= QFileDialog.ReadOnly
+        fileName, _ = QFileDialog.getOpenFileName(self, "Open Note", "", "Text Files (*.txt);;All Files (*)", options=options)
+        if fileName:
+            try:
+                with open(fileName, "r") as file:
+                    self.textEdit.setText(file.read())
+            except IOError:
+                QMessageBox.critical(self, "Error", "Failed to open file.")
+        self.noteChanged = False
 
     def saveNote(self):
-        if self.windowTitle() == "Note Taking App":
-            self.saveNoteAs()
-        else:
-            filename = self.windowTitle().split(" - ")[-1]
-            with open(filename, 'w') as file:
-                html_content = self.textEdit.document().toHtml()
-                file.write(html_content)
-            self.setWindowTitle(f"Note Taking App - {filename}")
-            self.noteChanged = False
-            QMessageBox.information(self, "Note Saved", "Note saved successfully.")
+        options = QFileDialog.Options()
+        options |= QFileDialog.ReadOnly
+        fileName, _ = QFileDialog.getSaveFileName(self, "Save Note", "", "Text Files (*.txt);;All Files (*)", options=options)
+        if fileName:
+            try:
+                with open(fileName, "w") as file:
+                    file.write(self.textEdit.toPlainText())
+                self.noteChanged = False
+                QMessageBox.information(self, "Saved", "Note saved successfully.")
+            except IOError:
+                QMessageBox.critical(self, "Error", "Failed to save file.")
 
-        
-    def promptSaveChanges(self):
-        response = QMessageBox.question(self, "Save Changes", "Do you want to save the changes to the current note?",
-                                        QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel)
-        return response
-        
+    def savePrompt(self):
+        reply = QMessageBox.question(self, "Save Changes", "Do you want to save your changes?", QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel)
+        if reply == QMessageBox.Yes:
+            self.saveNote()
+        elif reply == QMessageBox.Cancel:
+            return
+
     def closeEvent(self, event):
         if self.noteChanged:
-            response = self.promptSaveChanges()
-            if response == QMessageBox.Save:
-                self.saveNote()
-            elif response == QMessageBox.Cancel:
-                event.ignore()
-                return
-        self.saveSettings()
+            self.savePrompt()
         event.accept()
-        
-    def searchNote(self):
-        searchDialog = QInputDialog(self)
-        searchDialog.setInputMode(QInputDialog.TextInput)
-        searchDialog.setWindowTitle("Search")
-        searchDialog.setLabelText("Search Text:")
-        searchDialog.setOkButtonText("Search")
-        searchDialog.setCancelButtonText("Cancel")
-        if searchDialog.exec_() == QInputDialog.Accepted:
-            searchText = searchDialog.textValue()
-            flags = QTextDocument.FindFlags()
-            flags |= QTextDocument.FindCaseSensitively
-            if self.textEdit.find(searchText, flags):
-                QMessageBox.information(self, "Search Result", "Text found.")
-            else:
-                QMessageBox.information(self, "Search Result", "Text not found.")
-        
-    def toggleBold(self):
-        font = self.textEdit.currentFont()
-        font.setBold(not font.bold())
-        self.textEdit.setCurrentFont(font)
-        
-    def toggleItalic(self):
-        font = self.textEdit.currentFont()
-        font.setItalic(not font.italic())
-        self.textEdit.setCurrentFont(font)
-        
-    def toggleUnderline(self):
-        font = self.textEdit.currentFont()
-        font.setUnderline(not font.underline())
-        self.textEdit.setCurrentFont(font)
-        
-    def toggleBulletList(self):
-        if self.textEdit.textCursor().currentList():
-            self.textEdit.textCursor().createList()
-        else:
-            self.textEdit.textCursor().insertList(QTextListFormat.ListDisc)
-        
-    def toggleNumberedList(self):
-        if self.textEdit.textCursor().currentList():
-            self.textEdit.textCursor().createList()
-        else:
-            self.textEdit.textCursor().insertList(QTextListFormat.ListDecimal)
-            
-    def loadSettings(self):
-        self.settings.beginGroup('MainWindow')
-        self.resize(self.settings.value('size', QSize(500, 500)))
-        self.move(self.settings.value('pos', QPoint(100, 100)))
-        self.settings.endGroup()
-        
-    def saveSettings(self):
-        self.settings.beginGroup('MainWindow')
-        self.settings.setValue('size', self.size())
-        self.settings.setValue('pos', self.pos())
-        self.settings.endGroup()
 
-    def setFontSize(self):
-        font, ok = QFontDialog.getFont(self)
-        if ok:
-            currentCursor = self.textEdit.textCursor()
-            font.setPointSize(font.pointSize())  # Ensure explicit point size
-            self.textEdit.setCurrentFont(font)
-
-            # Reset the cursor to apply the font changes
-            self.textEdit.setTextCursor(currentCursor)
-
-    def setFont(self):
-        font, ok = QFontDialog.getFont(self)
-        if ok:
-            self.textEdit.setCurrentFont(font)
-
-
-    def setTextColor(self):
-        color = QColorDialog.getColor(self.textEdit.textColor(), self)
-        if color.isValid():
-            self.textEdit.setTextColor(color)
-
-        
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    noteApp = NoteTakingApp()
-    noteApp.show()
+    app.setStyle("Fusion")
+    window = NoteTakingApp()
     sys.exit(app.exec_())
