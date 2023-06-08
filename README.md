@@ -3,7 +3,7 @@
 
 NoteMaster is a powerful note-taking application built with PyQt5, offering a user-friendly interface for creating, editing, and organizing notes effortlessly. The application provides a range of features to enhance productivity and customization, making it suitable for both personal and professional note-taking needs.
 
-![NoteMaster Screenshot](screenshot.png)
+![NoteMaster Screenshot](screen.png)
 
 ## Key Features
 
@@ -42,7 +42,7 @@ The application window will appear, providing a clean and intuitive interface fo
 
 ## Screenshots
 
-![NoteMaster Screenshot](screenshot.png)
+![NoteMaster Screenshot](screen.png)
 
 ## Contributing
 
