@@ -3,6 +3,28 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 
+
+class LoadingScreen(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.initUI()
+
+    def initUI(self):
+        self.movie = QMovie("loading.gif")
+        self.label = QLabel(self)
+        self.label.setMovie(self.movie)
+
+        self.movie.start()
+
+        # Set the size of the label containing the image
+        self.label.setFixedSize(500, 500)
+
+        self.setWindowTitle("Loading...")
+        self.setWindowFlags(Qt.WindowStaysOnTopHint | Qt.FramelessWindowHint)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.show()
+
+
 class NoteTakingApp(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -394,8 +416,6 @@ class NoteTakingApp(QMainWindow):
             except IOError:
                 QMessageBox.critical(self, "Error", "Failed to save file.")
 
-
-
     def savePrompt(self):
         reply = QMessageBox.question(self, "Save Changes", "Do you want to save your changes?", QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel)
         if reply == QMessageBox.Yes:
@@ -408,8 +428,24 @@ class NoteTakingApp(QMainWindow):
             self.savePrompt()
         event.accept()
 
+
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
+
+    # Show the loading screen
+    loading_screen = LoadingScreen()
+    loading_screen.show()
+
+    # Simulate some time-consuming operations here (e.g., loading data or initializing resources)
+    # Instead of using time.sleep, we use QEventLoop to pause the execution
+    delay_loop = QEventLoop()
+    QTimer.singleShot(3000, delay_loop.quit)  # 3000 milliseconds (3 seconds) delay
+    delay_loop.exec_()
+
+    # Close the loading screen and start the main application
+    loading_screen.close()
     window = NoteTakingApp()
+    window.show()
+
     sys.exit(app.exec_())
