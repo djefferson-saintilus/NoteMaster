@@ -6,6 +6,7 @@ from PyQt5.QtCore import *
 class NoteTakingApp(QMainWindow):
     def __init__(self):
         super().__init__()
+        self.filePath=None
 
         self.initUI()
         self.noteChanged = False
@@ -61,9 +62,11 @@ class NoteTakingApp(QMainWindow):
         selectedText = cursor.selectedText()
         if selectedText:
             fmt = QTextCharFormat()
-            fmt.setBackground(Qt.NoBrush)
+            transparentBrush = QBrush(Qt.NoBrush)
+            fmt.setBackground(transparentBrush)
             cursor.mergeCharFormat(fmt)
-            self.textEdit.mergeCurrentCharFormat(fmt)
+
+
     def formatBold(self):
         fmt = QTextCharFormat()
         fmt.setFontWeight(QFont.Bold if self.formatBoldAction.isChecked() else QFont.Normal)
@@ -94,6 +97,7 @@ class NoteTakingApp(QMainWindow):
         else:
             cursor.insertList(QTextListFormat.ListDisc)
         self.textEdit.setFocus()
+
 
     def formatSize(self):
         font, ok = QFontDialog.getFont(self.textEdit.font(), self)
@@ -348,27 +352,37 @@ class NoteTakingApp(QMainWindow):
             self.savePrompt()
         options = QFileDialog.Options()
         options |= QFileDialog.ReadOnly
-        fileName, _ = QFileDialog.getOpenFileName(self, "Open Note", "", "Text Files (*.txt);;All Files (*)", options=options)
+        fileName, _ = QFileDialog.getOpenFileName(self, "Open Note", "", "HTML Files (*.html *.htm);;All Files (*)", options=options)
         if fileName:
             try:
                 with open(fileName, "r") as file:
-                    self.textEdit.setText(file.read())
+                    content = file.read()
+                    self.textEdit.setHtml(content)
             except IOError:
                 QMessageBox.critical(self, "Error", "Failed to open file.")
         self.noteChanged = False
 
     def saveNote(self):
-        options = QFileDialog.Options()
-        options |= QFileDialog.ReadOnly
-        fileName, _ = QFileDialog.getSaveFileName(self, "Save Note", "", "Text Files (*.txt);;All Files (*)", options=options)
+        if self.filePath:
+            fileName = self.filePath
+        else:
+            options = QFileDialog.Options()
+            options |= QFileDialog.ReadOnly
+            filter = "HTML Files (*.html *.htm);;All Files (*)"
+            fileName, _ = QFileDialog.getSaveFileName(self, "Save Note", "", filter, options=options)
+
         if fileName:
             try:
+                content = self.textEdit.toHtml()
                 with open(fileName, "w") as file:
-                    file.write(self.textEdit.toPlainText())
+                    file.write(content)
+                self.filePath = fileName
                 self.noteChanged = False
                 QMessageBox.information(self, "Saved", "Note saved successfully.")
             except IOError:
                 QMessageBox.critical(self, "Error", "Failed to save file.")
+
+
 
     def savePrompt(self):
         reply = QMessageBox.question(self, "Save Changes", "Do you want to save your changes?", QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel)
