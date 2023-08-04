@@ -10,6 +10,8 @@ class NoteTakingApp(QMainWindow):
 
         self.initUI()
         self.noteChanged = False
+        self.currentFont = self.textEdit.font()
+
 
     def initUI(self):
         self.textEdit = QTextEdit(self)
@@ -98,22 +100,24 @@ class NoteTakingApp(QMainWindow):
             cursor.insertList(QTextListFormat.ListDisc)
         self.textEdit.setFocus()
 
-
     def formatSize(self):
-        font, ok = QFontDialog.getFont(self.textEdit.font(), self)
+        font, ok = QFontDialog.getFont(self.currentFont, self)
         if ok and font.pointSizeF() > 0:
-            self.textEdit.setFont(font)
+            self.currentFont = QFont(font.family(), font.pointSizeF(), self.currentFont.weight(), self.currentFont.italic())
+            self.textEdit.setFont(self.currentFont)
         elif not ok:
             # Show an error message if the user cancels the font dialog
             QMessageBox.warning(self, "Error", "Font selection canceled.")
 
     def formatFont(self):
-        font, ok = QFontDialog.getFont(self.textEdit.font(), self)
+        font, ok = QFontDialog.getFont(self.currentFont, self)
         if ok:
-            self.textEdit.setFont(font)
+            self.currentFont = font
+            self.textEdit.setFont(self.currentFont)
         elif not ok:
             # Show an error message if the user cancels the font dialog
             QMessageBox.warning(self, "Error", "Font selection canceled.")
+
 
     def formatColor(self):
         color = QColorDialog.getColor(self.textEdit.textColor(), self)
@@ -123,8 +127,6 @@ class NoteTakingApp(QMainWindow):
             # Show an error message if the user cancels the color dialog
             QMessageBox.warning(self, "Error", "Color selection canceled.")
 
-    # ... (remaining functions)
-
     def insertImage(self):
         options = QFileDialog.Options()
         options |= QFileDialog.ReadOnly
@@ -132,22 +134,32 @@ class NoteTakingApp(QMainWindow):
         if file:
             imageFormat = QImage(file).format()
             if imageFormat != QImage.Format_Invalid:
-                self.textEdit.document().addResource(QTextDocument.ImageResource, QUrl(file), QVariant(QImage(file)))
+                # Get the original image size
+                originalImage = QImage(file)
+                originalWidth = originalImage.width()
+                originalHeight = originalImage.height()
 
                 # Prompt the user for the desired width and height in percentage
-                width, ok1 = QInputDialog.getInt(self, "Image Size", "Enter width (in percentage):", 50, 1, 100)
-                height, ok2 = QInputDialog.getInt(self, "Image Size", "Enter height (in percentage):", 50, 1, 100)
+                width, ok1 = QInputDialog.getInt(self, "Image Size", "Enter width (in pixels):", originalWidth, 1, 2000)
+                height, ok2 = QInputDialog.getInt(self, "Image Size", "Enter height (in pixels):", originalHeight, 1, 2000)
 
                 if ok1 and ok2:
-                    # Generate the img tag with inline styling
-                    img_tag = f'<img src="{file}" style="width: {width}%; height: {height}%;">'
+                    # Generate the img tag with inline styling using pixel values
+                    img_tag = f'<img src="{file}" width="{width}" height="{height}">'
                     cursor = self.textEdit.textCursor()
                     cursor.insertHtml(img_tag)
-        elif not file:
-            # Show an error message if the user cancels the file dialog
+                    # Move the cursor after the inserted image
+                    cursor.movePosition(QTextCursor.End)
+                    self.textEdit.setTextCursor(cursor)
+                    # Set focus back to the textEdit widget
+                    self.textEdit.setFocus()
+                    self.noteChanged = True  # Mark the note as changed after inserting the image
+                else:
+                    QMessageBox.warning(self, "Error", "Invalid width/height value. Image insertion canceled.")
+            else:
+                QMessageBox.warning(self, "Error", "Invalid image format. Image insertion canceled.")
+        else:
             QMessageBox.warning(self, "Error", "Image insertion canceled.")
-
-
 
     def insertHyperlink(self):
         link, ok = QInputDialog.getText(self, "Insert Hyperlink", "Enter URL:")
