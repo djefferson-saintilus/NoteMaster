@@ -6,4 +6,4 @@
 3. now font text and size work vice versa, it mean you can still set a font
 size and the size will still remain to let you set a font family
 4. added preloading screen
-5. 
+5. manage CTRL + C error; also the close button error

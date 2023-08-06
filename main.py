@@ -34,7 +34,6 @@ class NoteTakingApp(QMainWindow):
         self.noteChanged = False
         self.currentFont = self.textEdit.font()
 
-
     def initUI(self):
         self.textEdit = QTextEdit(self)
         self.setCentralWidget(self.textEdit)
@@ -50,6 +49,17 @@ class NoteTakingApp(QMainWindow):
         self.setWindowTitle("Note Taking App")
 
         self.show()
+
+    def closeEvent(self, event):
+        if self.noteChanged:
+            self.savePrompt()
+        event.accept()
+
+    # New method to handle KeyboardInterrupt (Ctrl+C)
+    def handleKeyboardInterrupt(self):
+        if self.noteChanged:
+            self.savePrompt()
+        sys.exit(0)  # Exit the application gracefully
 
     def onTextChanged(self):
         self.noteChanged = True
